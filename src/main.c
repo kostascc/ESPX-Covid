@@ -12,12 +12,14 @@
 #include <math.h>
 #include <unistd.h>
 #include "covidTrace.h"
+#include <math.h>
 
 
-#define DEFAULT_PRODUCERS 2     // Default Number of Producer Threads
+#define DEFAULT_PRODUCERS 1     // Default Number of Producer Threads
 #define DEFAULT_CONSUMERS 2     // Default Number of Consumer Threads
-#define DEFAULT_QUEUE_SIZE 1    // Default Size of Function Queue
-#define DEFAULT_FUNCTIONS_T 3   // Default Functions per Thread
+#define DEFAULT_QUEUE_SIZE 20   // Default Size of Function Queue
+// #define DEFAULT_FUNCTIONS_T 99999999   // Default Functions per Thread
+
 
 // #define PRINT_TIMER
 #define PRINT_FILE
@@ -146,100 +148,28 @@ int main(int argc, char** argv)
      * Read Arrguments
      ***********************/
 
-    // If no arguments
-    // if (argc <= 1)
-	// {
-    //     // Show usage info
-	// 	printf( "Usage: \n" );
-	// 	printf( " -p <int>  : Producers\n" );
-	// 	printf( " -q <int>  : Consumers\n" );
-    //     printf( " -s <int>  : Queue Size\n" );
-    //     printf( " -l <int>  : Functions per Producer (Thread)\n" );
-    //     // exit
-    //     return 0;
-	// }
-
     srand(time(NULL));
 
     covidTraceInit();
 
+    clock_t start_cputime, end_cputime;
+    start_cputime = clock();
 
-    for(int i=0; i<50; i++){
-        tick();
-        delay_ms(100);
-    }
-   
-    covidTraceDestroy();
-    
+    double start_realtime, end_realtime;
+    start_realtime = getRealClockSeconds();
 
-    return 0;
-}
-
-int fifo_main(int argc, char** argv)
-{
-
-    /***********************
-     * Read Arrguments
-     ***********************/
-
-    // If no arguments
-    if (argc <= 1)
-	{
-        // Show usage info
-		printf( "Usage: \n" );
-		printf( " -p <int>  : Producers\n" );
-		printf( " -q <int>  : Consumers\n" );
-        printf( " -s <int>  : Queue Size\n" );
-        printf( " -l <int>  : Functions per Producer (Thread)\n" );
-        // exit
-        return 0;
-	}
-
-
-    int p = DEFAULT_PRODUCERS;  // Producers
-    int q = DEFAULT_CONSUMERS;  // Consumers
-    int s = DEFAULT_QUEUE_SIZE; // Queue Size
-    int l = DEFAULT_FUNCTIONS_T;// Functions per Thread
-
-    // Read Arguments
-	for (int i = 1; i < argc; i++)
-	{
-		if ( strcmp(argv[i], "-p") == 0 ) {
-			i++;
-			p = (i < argc) ? atoi(argv[i]) : DEFAULT_PRODUCERS;
-		}
-
-        else if ( strcmp(argv[i], "-q") == 0 ) {
-			i++;
-			q = (i < argc) ? atoi(argv[i]) : DEFAULT_CONSUMERS;
-		}
-
-        else if ( strcmp(argv[i], "-s") == 0 ) {
-			i++;
-			s = (i < argc) ? atoi(argv[i]) : DEFAULT_QUEUE_SIZE;
-		}
-
-        else if ( strcmp(argv[i], "-l") == 0 ) {
-			i++;
-			l = (i < argc) ? atoi(argv[i]) : DEFAULT_FUNCTIONS_T;
-		}
-
-	}
-
-    printf( "Producers: %d\nConsumers: %d\nQueue Size: %d\nFunctions per Producer: %d\n", p, q, s, l );
-
-    /* Initialize Output File */
-    #ifdef PRINT_FILE
-        char fname[80];
-        sprintf(fname, "out_p-%d_q-%d_s-%d.txt\0", p, q, s);
-        // sprintf(fname, "out.txt\0");
-        fp = fopen (fname, "w+");
-    #endif
-
+    // for(int i=0; i<5000; i++){
+    //     tick();
+    //     delay_ms(10);
+    // }
 
     /***********************
      * Create & Run Queue
      ***********************/
+    int p = DEFAULT_PRODUCERS;  // Producers
+    int q = DEFAULT_CONSUMERS;  // Consumers
+    int s = DEFAULT_QUEUE_SIZE; // Queue Size
+    int l = 0;// Functions per Thread
 
     queue *fifo;
     // Initialize Producers and Consumers
@@ -259,7 +189,7 @@ int fifo_main(int argc, char** argv)
 
     // Start Consumer Threads
     for(int i=0; i<q; i++)
-    {    
+    {   
         t_args* _t_args = (t_args*) malloc(sizeof(t_args));
         _t_args->fifo = fifo;
         _t_args->loop = l;
@@ -267,7 +197,7 @@ int fifo_main(int argc, char** argv)
         _t_args->q = q;
         _t_args->idx = i;
         pthread_create (&(con[i]), NULL, _f_consumer, (void*)_t_args);
-    }    
+    }
 
     // Start Producer Threads
     for(int i=0; i<p; i++)
@@ -285,19 +215,31 @@ int fifo_main(int argc, char** argv)
     for(int i=0; i<p; i++)
         pthread_join (pro[i], NULL);
 
-    for(int i=0; i<q; i++)  
-        pthread_join (con[i], NULL);
+    delay_ms(500);
+
+    // for(int i=0; i<q; i++)
+    //     pthread_cancel (con[i]);
+
+
+    covidTraceDestroy();
+
+    end_cputime = clock();
+    end_realtime = getRealClockSeconds();
+
+    double cputime_used = ((double) (end_cputime - start_cputime)) / CLOCKS_PER_SEC;
+    double realtime_used = end_realtime - start_realtime;
+
+    printf("\n\nREAL/CPU TIME:   %lf / %lf  (s)\n", realtime_used, cputime_used);
+    
+    return 0;
+    
+    // for(int i=0; i<q; i++)  
+    //     pthread_join (con[i], NULL);
 
     // Clean Up
     queueDelete(fifo);
     free(pro);
     free(con); 
-
-    #ifdef PRINT_FILE
-        fclose(fp);
-    #endif
-
-    print_stats(fname);
 
     return 0;
 }
@@ -306,15 +248,15 @@ int fifo_main(int argc, char** argv)
 void *_f_producer (void *inArgs)
 {
     queue *fifo;
-    int loop;
+    // int loop;
     int i;
     int idx;
 
     fifo = (queue*) ((struct t_args*)inArgs)-> fifo;
-    loop = (int)    ((struct t_args*)inArgs)-> loop;
+    // loop = (int)    ((struct t_args*)inArgs)-> loop;
     idx  = (int)    ((struct t_args*)inArgs)-> idx;
 
-    for (i = 0; i < loop; i++) {
+    for (i = 0; i < RUNTIME_SECS / 10; i++) {
         pthread_mutex_lock (fifo->mut);
 
         while (fifo->full) {
@@ -332,13 +274,19 @@ void *_f_producer (void *inArgs)
         // clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 
         // Set Arguments
-        struct timespec * argi = (struct timespec *)malloc(sizeof(struct timespec));
-        // argi[0] = start;
-        clock_gettime(CLOCK_MONOTONIC_RAW, argi);
+        //struct timespec * argi = (struct timespec *)malloc(sizeof(struct timespec));
+        while(fabs(remainder((double) getRealClockSeconds()*SPEED_MULTIPLIER, TICK_INTERVAL)) > 0.01){;}
+
+        double* argi = (double *)malloc(sizeof(double));
+        // void* argi = NULL;
+        // clock_gettime(CLOCK_MONOTONIC_RAW, argi);
+        *argi = getRealClockSeconds();
         wf->arg  = (argi);
 
         // Set Function
-        wf->work = (&work);
+        wf->work = (&tick);
+
+        // printf("prod: %lf\n", getRealClockSeconds()*SPEED_MULTIPLIER);
         
         enqueue (fifo, (workFunction*)wf);
 
@@ -347,6 +295,13 @@ void *_f_producer (void *inArgs)
         #endif
         pthread_mutex_unlock (fifo->mut);
         pthread_cond_signal (fifo->notEmpty);
+
+        if(fabs(remainder((double) getRealClockSeconds()*SPEED_MULTIPLIER, 60*60*24)) < 0.2)
+            printf("Day %d finished...\n", (int)(getRealClockSeconds()*SPEED_MULTIPLIER / (60*60*24)));
+
+
+        delay_ns(100);
+
     }
 
     return (NULL);
@@ -372,7 +327,8 @@ void *_f_consumer (void *inArgs)
 
     // printf ("consumer %d: rec count %d.\n", idx, rec_count);
 
-    for(i=0; i<rec_count; i++) {
+    // for(i=0; i<rec_count; i++) {
+    while(true){
         pthread_mutex_lock (fifo->mut);
 
         while (fifo->empty) {

@@ -16,23 +16,25 @@
 #include <time.h> 
 #include "pthread_fifo.h"
 
-#define SPEED_MULTIPLIER 100
+#define SPEED_MULTIPLIER 5000
 
-#define POSITIVE_TEST_PROBABILITY 0.5
+#define POSITIVE_TEST_PROBABILITY 0.1
 
 /**
  * Mac Address limits
  **/
-#define MAC_ADDRESS_MIN 0x123456789FF0
+#define MAC_ADDRESS_MIN 0x123456789F00
 #define MAC_ADDRESS_MAX 0x123456789FFF
 
 /**
  * Timing Configuration
  **/
 #define MAX_TEMP_NEAR_CONTACT_DURATION       20*60  // 20 Minutes (in secs)
-#define MIN_TEMP_NEAR_CONTACT_DURATION        1*60  //  4 Minutes (in secs)
+#define MIN_TEMP_NEAR_CONTACT_DURATION        4*60  //  4 Minutes (in secs)
 #define MAX_NEAR_CONTACT_DURATION      14*24*60*60  // 14 Days    (in secs)
 #define TICK_INTERVAL                           10  // 10 Seconds
+#define COVID_TEST_INTERVAL                4*60*60  // 4 Hours    (in secs)
+#define RUNTIME_SECS                   30*24*60*60  // 30 Days    (in secs)
 
 // Tick Mutex
 pthread_mutex_t tick_mutex;
@@ -47,6 +49,8 @@ pthread_mutex_t btnear_file_mutex;
 // CovidTest file mutex
 pthread_mutex_t covidTest_file_mutex;
 
+int upload_idx;
+
 // Bluetooth near finds
 FILE* fout_BTnear;
 
@@ -55,6 +59,9 @@ FILE* fout_upload;
 
 // Covid Tests
 FILE* fout_CovidTest;
+
+// Tick Latency
+FILE* fout_tickLatency;
 
 /**
  * uint48_t Integer containing the value of a MAC address
@@ -143,7 +150,7 @@ void destroy_queuenode(queuenode* queuenode);
 /**
  * Create dynamically allocated record
  **/
-record* create_record(clock_t time, macaddress* mac);
+// record* create_record(clock_t time, macaddress* mac);
 
 /**
  * Scan for close-by bluetooth device
