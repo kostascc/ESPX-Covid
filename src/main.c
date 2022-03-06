@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include <unistd.h>
 #include "covidTrace.h"
 
 
@@ -146,30 +147,36 @@ int main(int argc, char** argv)
      ***********************/
 
     // If no arguments
-    if (argc <= 1)
-	{
-        // Show usage info
-		printf( "Usage: \n" );
-		printf( " -p <int>  : Producers\n" );
-		printf( " -q <int>  : Consumers\n" );
-        printf( " -s <int>  : Queue Size\n" );
-        printf( " -l <int>  : Functions per Producer (Thread)\n" );
-        // exit
-        return 0;
-	}
-
+    // if (argc <= 1)
+	// {
+    //     // Show usage info
+	// 	printf( "Usage: \n" );
+	// 	printf( " -p <int>  : Producers\n" );
+	// 	printf( " -q <int>  : Consumers\n" );
+    //     printf( " -s <int>  : Queue Size\n" );
+    //     printf( " -l <int>  : Functions per Producer (Thread)\n" );
+    //     // exit
+    //     return 0;
+	// }
 
     srand(time(NULL));
 
+    covidTraceInit();
+
+
+    for(int i=0; i<50; i++){
+        tick();
+        delay_ms(100);
+    }
+   
+    covidTraceDestroy();
     
 
-
-
+    return 0;
 }
 
 int fifo_main(int argc, char** argv)
 {
-
 
     /***********************
      * Read Arrguments

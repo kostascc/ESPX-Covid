@@ -5,8 +5,8 @@
  * kachatzis <at> ece.auth.gr
  **/
 
-#ifndef covidtrace_h__
-#define covidtrace_h__
+#ifndef COVIDTRACE_H
+#define COVIDTRACE_H
 
 #include <stdint.h>
 #include <stdio.h>
@@ -16,21 +16,21 @@
 #include <time.h> 
 #include "pthread_fifo.h"
 
-#define SPEED_MULTIPLIER 1
+#define SPEED_MULTIPLIER 100
 
-#define POSITIVE_TEST_PROBABILITY 0.001
+#define POSITIVE_TEST_PROBABILITY 0.5
 
 /**
  * Mac Address limits
  **/
-#define MAC_ADDRESS_MAX 0x012345678A00
-#define MAC_ADDRESS_MIN 0x012345678FFF
+#define MAC_ADDRESS_MIN 0x123456789FF0
+#define MAC_ADDRESS_MAX 0x123456789FFF
 
 /**
  * Timing Configuration
  **/
 #define MAX_TEMP_NEAR_CONTACT_DURATION       20*60  // 20 Minutes (in secs)
-#define MIN_TEMP_NEAR_CONTACT_DURATION        4*60  //  4 Minutes (in secs)
+#define MIN_TEMP_NEAR_CONTACT_DURATION        1*60  //  4 Minutes (in secs)
 #define MAX_NEAR_CONTACT_DURATION      14*24*60*60  // 14 Days    (in secs)
 #define TICK_INTERVAL                           10  // 10 Seconds
 
@@ -40,6 +40,21 @@ pthread_mutex_t tick_mutex;
 pthread_mutex_t contact_mutex;
 // Temporary Contact Queue mutex
 pthread_mutex_t temp_find_mutex;
+// Contact File mutex
+pthread_mutex_t upload_file_mutex;
+// BTnear file mutex
+pthread_mutex_t btnear_file_mutex;
+// CovidTest file mutex
+pthread_mutex_t covidTest_file_mutex;
+
+// Bluetooth near finds
+FILE* fout_BTnear;
+
+// Uploaded Contacts
+FILE* fout_upload;
+
+// Covid Tests
+FILE* fout_CovidTest;
 
 /**
  * uint48_t Integer containing the value of a MAC address
@@ -55,7 +70,7 @@ typedef struct {
  * @param mac 48-bit mac address 
  **/
 typedef struct {
-    clock_t time;
+    double time;
     macaddress* mac;
 } record ;
 
@@ -71,13 +86,13 @@ typedef struct quenenode_{
 } queuenode ;
 
 // Latest contact record in queue
-queuenode* last_contact_queuenode = NULL;
+queuenode* last_contact_queuenode;
 
 // Temporary finds of queuenodes, that were seen 0-20 minutes ago.
-queuenode* last_temp_queuenode = NULL;
+queuenode* last_temp_queuenode;
 
 // Running Clock
-clock_t system_clock;
+struct timespec system_clock_start;
 
 /**
  * Timer tick function
@@ -152,5 +167,7 @@ bool testCOVID();
  * Close Contact Records will be removed from queue after the upload.
  **/
 void uploadContacts(macaddress** mac, int count);
+
+double getRealClockSeconds();
 
 #endif

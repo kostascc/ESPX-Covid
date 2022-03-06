@@ -29,6 +29,7 @@ void tick(){
             new_queuenode->prev_node = last_contact_queuenode;
             new_queuenode->record    = record;
             last_contact_queuenode   = new_queuenode;
+            printf("Close Contact: %#012lx\n", record->mac->value);
             pthread_mutex_unlock(&contact_mutex);
 
         }else{
@@ -38,7 +39,7 @@ void tick(){
             // Create no-close contact record
             record = malloc(sizeof(record));
             record->mac = mac;
-            record->time = clock();
+            record->time = getRealClockSeconds() * SPEED_MULTIPLIER;
 
             queuenode* new_temp_queuenode = malloc(sizeof( queuenode));
             
@@ -55,7 +56,71 @@ void tick(){
 
     }
 
+    // Test
+    if(testCOVID()){
+        // Log positive test
+        pthread_mutex_lock(&covidTest_file_mutex);
+        fprintf(fout_CovidTest,"%f %d\n", getRealClockSeconds() * SPEED_MULTIPLIER, 1);
+        pthread_mutex_unlock(&covidTest_file_mutex);
+
+        // Upload near Contacts of last 14 Days
+        //scan_and_upload_near_contacts();
+
+    }else{
+        // Log Negative Test
+        pthread_mutex_lock(&covidTest_file_mutex);
+        fprintf(fout_CovidTest,"%f %d\n", getRealClockSeconds() * SPEED_MULTIPLIER, 0);
+        pthread_mutex_unlock(&covidTest_file_mutex);
+
+    }
+
+    // clean_records();
+
     pthread_mutex_unlock(&tick_mutex);
+}
+
+
+void scan_and_upload_near_contacts(){
+
+    pthread_mutex_lock(&upload_file_mutex);
+    fprintf(fout_upload,"%f %d\n", getRealClockSeconds() * SPEED_MULTIPLIER, 1);
+
+    int count = 0;
+    if(last_contact_queuenode != NULL){
+        queuenode* q = last_contact_queuenode;
+        while(true){
+            count++;
+            if(q->prev_node != NULL){
+                q = q->prev_node;
+            }else{
+                break;
+            }
+        }
+    }
+
+    printf("upload: %d\n", count);
+    if(count > 0){
+
+        macaddress* macs = (macaddress*)malloc(count*sizeof(macaddress));
+        
+        queuenode* q = last_contact_queuenode;
+
+        for(int i=0; i<count; i++){
+
+            macs[i].value = q->record->mac->value;
+            printf("> %#012lx\n", macs[i].value);
+
+            pthread_mutex_lock(&upload_file_mutex);
+            fprintf(fout_upload,"%f %#012lx\n", getRealClockSeconds() * SPEED_MULTIPLIER, macs[i].value);
+            pthread_mutex_unlock(&upload_file_mutex);
+
+            q = q->prev_node;
+        }
+
+    }
+
+    pthread_mutex_unlock(&upload_file_mutex);
+    return;
 }
 
 
@@ -80,17 +145,6 @@ void destroy_queuenode(queuenode* queuenode){
 }
 
 
-// void add_record(record* record){
-
-//     queuenode* queuenode = malloc(sizeof(queuenode));
-//     queuenode->record = record;
-
-//     // add_queuenode(queuenode); 
-
-
-// }
-
-
 record* create_record(clock_t time, macaddress* mac){
 
     record* record = malloc(sizeof(record));
@@ -111,7 +165,7 @@ void clean_records(){
         while(true){
 
             // Check and skip every record from 4 minutes ago
-            if( clock_diff_to_seconds(current_node->record->time, clock()) > translate_time_double(MAX_TEMP_NEAR_CONTACT_DURATION) ){
+            if( getRealClockSeconds()*SPEED_MULTIPLIER - current_node->record->time > (double)MAX_TEMP_NEAR_CONTACT_DURATION ){
                 
                 pthread_mutex_lock(&temp_find_mutex);
                 destroy_queuenode(current_node);
@@ -136,7 +190,7 @@ void clean_records(){
         while(true){
 
             // Check and skip every record from 4 minutes ago
-            if( clock_diff_to_seconds(current_node->record->time, clock()) > translate_time_double(MAX_NEAR_CONTACT_DURATION) ){
+            if( getRealClockSeconds()*SPEED_MULTIPLIER - current_node->record->time > (double)MAX_NEAR_CONTACT_DURATION ){
                 
                 pthread_mutex_lock(&contact_mutex);
                 destroy_queuenode(current_node);
@@ -173,7 +227,7 @@ record* find_previous_temp_close_contact(macaddress* mac){
             // If mac addresses are equal
             if(current_node->record->mac->value == mac->value){
                 // If last scan of address was 4 minutes ago
-                if( clock_diff_to_seconds(current_node->record->time, clock()) >= translate_time_double(MIN_TEMP_NEAR_CONTACT_DURATION)){
+                if( getRealClockSeconds()*SPEED_MULTIPLIER - current_node->record->time >= (double)MIN_TEMP_NEAR_CONTACT_DURATION){
                     
                     pthread_mutex_lock(&temp_find_mutex);
                     // Delete Record from node
@@ -181,7 +235,7 @@ record* find_previous_temp_close_contact(macaddress* mac){
                     current_node->record = NULL;
                     pthread_mutex_unlock(&temp_find_mutex);
 
-                    return current_node->record;
+                    return record;
                 }
             }
         }
@@ -210,7 +264,7 @@ bool find_previous_temp_no_close_contact(macaddress* mac){
 
         if(current_node->record != NULL){
             // Check and skip every record from 4 minutes ago
-            if( clock_diff_to_seconds(current_node->record->time, clock()) >= translate_time_double(MIN_TEMP_NEAR_CONTACT_DURATION) ){
+            if( getRealClockSeconds()*SPEED_MULTIPLIER - current_node->record->time >= (double)(MIN_TEMP_NEAR_CONTACT_DURATION) ){
                 return false;
             }
 
@@ -232,10 +286,15 @@ bool find_previous_temp_no_close_contact(macaddress* mac){
 }
 
 
-
 macaddress* BTnearMe(){
-     macaddress* ret = malloc(sizeof( macaddress));
+
+    macaddress* ret = malloc(sizeof( macaddress));
     ret->value = (uint64_t)MAC_ADDRESS_MIN + ((uint64_t)rand()) % ((uint64_t)(MAC_ADDRESS_MAX - MAC_ADDRESS_MIN));
+
+    pthread_mutex_lock(&btnear_file_mutex);
+    fprintf(fout_BTnear,"%f %#012lx\n", getRealClockSeconds() * SPEED_MULTIPLIER, (int64_t)ret->value);
+    pthread_mutex_unlock(&btnear_file_mutex);
+
     return ret;
 }
 
@@ -248,6 +307,16 @@ bool testCOVID(){
 }
 
 void uploadContacts(macaddress** mac, int count){
+
+    pthread_mutex_lock(&upload_file_mutex);
+
+    for(int i=0; i<count; i++){
+
+
+
+    }
+
+    pthread_mutex_unlock(&upload_file_mutex);
 
 }
 
@@ -263,7 +332,7 @@ double translate_time_double(double time){
     return (double)((double)time / SPEED_MULTIPLIER);
 }
 
-void init(){
+void covidTraceInit(){
 
     if (pthread_mutex_init(&tick_mutex, NULL) != 0) {
         printf("\n[ERROR] Mutex init failed\n");
@@ -277,12 +346,49 @@ void init(){
         printf("\n[ERROR] Mutex init failed\n");
         exit(1);
     }
+    if (pthread_mutex_init(&upload_file_mutex, NULL) != 0) {
+        printf("\n[ERROR] Mutex init failed\n");
+        exit(1);
+    }
+    if (pthread_mutex_init(&btnear_file_mutex, NULL) != 0) {
+        printf("\n[ERROR] Mutex init failed\n");
+        exit(1);
+    }
+    if (pthread_mutex_init(&covidTest_file_mutex, NULL) != 0) {
+        printf("\n[ERROR] Mutex init failed\n");
+        exit(1);
+    }
 
+    // Clean outputs
+    fout_BTnear = fopen("BTnear.out", "w");
+    fprintf(fout_BTnear,"");
+    fout_upload = fopen("Upload.out", "w");
+    fprintf(fout_upload,"");
+    fout_CovidTest = fopen("CovidTest.out", "w");
+    fprintf(fout_CovidTest,"");
 
+    // Set Queues
+    last_contact_queuenode = NULL;
+    last_temp_queuenode    = NULL;
+
+    // Start Clock
+    clock_gettime(CLOCK_REALTIME, &system_clock_start);
 }
 
-void destroy(){
+void covidTraceDestroy(){
     pthread_mutex_destroy(&tick_mutex);
     pthread_mutex_destroy(&contact_mutex);
     pthread_mutex_destroy(&temp_find_mutex);
+    pthread_mutex_destroy(&upload_file_mutex);
+    pthread_mutex_destroy(&btnear_file_mutex);
+
+    fclose(fout_BTnear);
+    fclose(fout_upload);
+}
+
+double getRealClockSeconds(){
+    struct timespec end;
+    clock_gettime(CLOCK_REALTIME, &end);
+    double delta_s = ((double) ((end.tv_sec - system_clock_start.tv_sec) * 1000000 + (end.tv_nsec - system_clock_start.tv_nsec) / 1000))/1000000;
+    return delta_s;
 }
